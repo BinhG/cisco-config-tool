@@ -5,6 +5,8 @@ const state = {
   selectedDeviceId: null,
   selectedJobId: null,
   lastAgentProposal: null,
+  advisorSessionId: null,
+  advisorDeviceId: null,
 };
 
 const qs = (selector) => document.querySelector(selector);
@@ -129,6 +131,13 @@ function renderSelectedDevice() {
   qs("#deleteDeviceBtn").disabled = !hasDevice;
   qs("#pushBtn").disabled = !hasDevice;
   qs("#agentBtn").disabled = !hasDevice;
+  qs("#advisorBtn").disabled = !hasDevice;
+  if (device && state.advisorDeviceId !== device.id) {
+    state.advisorSessionId = null;
+    state.advisorDeviceId = device.id;
+    qs("#advisorMessages").replaceChildren();
+    qs("#advisorScript").value = "";
+  }
 }
 
 function renderJobs() {
@@ -324,6 +333,97 @@ async function createAgentProposal(event) {
   }
 }
 
+async function ensureAdvisorSession() {
+  const device = selectedDevice();
+  if (!device) throw new Error("Chưa chọn thiết bị.");
+  if (state.advisorSessionId && state.advisorDeviceId === device.id) {
+    return state.advisorSessionId;
+  }
+  const session = await api("/api/advisor/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      device_id: device.id,
+      title: `Advisor - ${device.name}`,
+      topology_notes: device.notes || "",
+    }),
+  });
+  state.advisorSessionId = session.id;
+  state.advisorDeviceId = device.id;
+  return session.id;
+}
+
+async function sendAdvisorMessage(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const message = String(data.get("message") || "").trim();
+  if (!message) return;
+
+  appendAdvisorMessage("user", message);
+  qs("#advisorBtn").disabled = true;
+  qs("#advisorBtn").textContent = "Đang đọc context";
+  qs("#advisorStatus").textContent = "Đang collect show commands và phân tích";
+
+  try {
+    const sessionId = await ensureAdvisorSession();
+    const response = await api(`/api/advisor/sessions/${sessionId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        auto_collect: data.get("auto_collect") === "on",
+        commands_text: data.get("commands_text") || "",
+        prefer_offline: data.get("prefer_offline") === "on",
+      }),
+    });
+    const assistant = response.assistant_message;
+    appendAdvisorMessage("assistant", assistant.content);
+    const proposal = assistant.proposal || {};
+    if (proposal.terminal_script) {
+      qs("#advisorScript").value = proposal.terminal_script;
+    }
+    if (proposal.config) {
+      qs("#agentConfig").value = proposal.config;
+      renderAgentProposal(proposal);
+    }
+    form.reset();
+    form.querySelector('input[name="auto_collect"]').checked = true;
+    qs("#advisorStatus").textContent = assistant.has_context ? "Đã dùng context thiết bị" : "Trả lời không có context thiết bị";
+  } catch (error) {
+    appendAdvisorMessage("assistant", `Lỗi: ${error.message}`);
+    qs("#advisorStatus").textContent = "Lỗi khi phân tích";
+  } finally {
+    qs("#advisorBtn").textContent = "Hỏi quân sư";
+    qs("#advisorBtn").disabled = !selectedDevice();
+  }
+}
+
+function appendAdvisorMessage(role, content) {
+  const row = document.createElement("div");
+  row.className = `advisor-message ${role}`;
+  const label = document.createElement("strong");
+  label.textContent = role === "user" ? "Bạn" : "Quân sư";
+  const body = document.createElement("div");
+  body.textContent = content;
+  row.append(label, body);
+  const list = qs("#advisorMessages");
+  list.append(row);
+  list.scrollTop = list.scrollHeight;
+}
+
+async function copyAdvisorScriptToPush() {
+  const script = qs("#advisorScript").value.trim();
+  if (!script) {
+    showToast("Chưa có terminal script.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(script);
+    showToast("Đã copy terminal script.");
+  } catch {
+    showToast("Không copy được tự động; bạn có thể bôi đen script và copy thủ công.");
+  }
+}
+
 function renderAgentProposal(proposal) {
   qs("#agentResult").hidden = false;
   qs("#agentSource").textContent = proposal.source === "openai" ? "OpenAI" : "Offline";
@@ -431,6 +531,7 @@ function bindEvents() {
   qs("#refreshAll").addEventListener("click", refreshAll);
   qs("#refreshBackups").addEventListener("click", refreshBackups);
   qs("#deviceForm").addEventListener("submit", createDevice);
+  qs("#advisorForm").addEventListener("submit", sendAdvisorMessage);
   qs("#agentForm").addEventListener("submit", createAgentProposal);
   qs("#pushForm").addEventListener("submit", pushConfig);
   qs("#connectionType").addEventListener("change", toggleConnectionFields);
@@ -444,6 +545,7 @@ function bindEvents() {
   });
   qs("#deleteDeviceBtn").addEventListener("click", deleteSelectedDevice);
   qs("#copyAgentConfig").addEventListener("click", copyAgentConfigToPush);
+  qs("#copyAdvisorScript").addEventListener("click", copyAdvisorScriptToPush);
   qs("#showAgentDetail").addEventListener("click", toggleAgentDetail);
 }
 

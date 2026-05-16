@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 try:
@@ -13,17 +11,13 @@ except ImportError as exc:  # pragma: no cover - startup guard
 
 from .agent import create_agent_proposal
 from .commands import (
-    DEFAULT_DISCOVERY_COMMANDS,
     find_interactive_hints,
     find_risky_commands,
-    mask_sensitive_config,
     split_config_commands,
-    split_show_commands,
     terminal_script_from_config,
-    validate_show_commands,
 )
-from .connections import CiscoConnection
 from .db import Database
+from .device_context import collect_device_context, summarize_context_for_ai
 from .security import SecretBox
 from .settings import get_settings
 
@@ -90,25 +84,6 @@ def _device_for_connection(device_id: int) -> dict[str, Any]:
     if row is None:
         raise ValueError(f"Device not found: {device_id}")
     return row
-
-
-def _session_log_path(device_id: int) -> Path:
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    return settings.resolved_session_log_dir / f"mcp_read_device_{device_id}_{timestamp}.log"
-
-
-def _mask_outputs(outputs: dict[str, str], include_running_config: bool) -> dict[str, str]:
-    masked: dict[str, str] = {}
-    for command, output in outputs.items():
-        lowered = command.lower()
-        if "running-config" in lowered or lowered in {"show run", "show running"}:
-            if include_running_config:
-                masked[command] = mask_sensitive_config(output)
-            else:
-                masked[command] = "<running-config omitted; call with include_running_config=true to return redacted config>"
-        else:
-            masked[command] = output
-    return masked
 
 
 @mcp.tool()
@@ -227,40 +202,17 @@ def cisco_collect_device_info(
         max_output_chars: Truncate combined output to this limit.
     """
     _initialize()
-    commands = split_show_commands(commands_text) if commands_text.strip() else list(DEFAULT_DISCOVERY_COMMANDS)
-    if not include_running_config:
-        commands = [cmd for cmd in commands if "running-config" not in cmd.lower() and cmd.lower() not in {"show run", "show running"}]
-    errors = validate_show_commands(commands)
-    if errors:
-        return _json({"ok": False, "errors": errors, "outputs": {}})
-
     device = _device_for_connection(device_id)
-    password = secrets.decrypt(device.get("password"))
-    secret = secrets.decrypt(device.get("secret"))
-    session_log_path = _session_log_path(device_id)
-    logs: list[dict[str, str]] = []
-
-    def log(message: str, level: str = "info") -> None:
-        logs.append({"level": level, "message": message})
-
-    with CiscoConnection(device, password, secret, session_log_path, log) as conn:
-        outputs = conn.run_show_commands(commands)
-
-    masked_outputs = _mask_outputs(outputs, include_running_config)
-    result = {
-        "ok": True,
-        "device": _safe_devices([device_id])[0],
-        "commands": commands,
-        "outputs": masked_outputs,
-        "session_log": str(session_log_path),
-        "logs": logs,
-        "policy": "read-only show commands only; running-config secrets redacted",
-    }
-    text = _json(result)
-    if len(text) > max_output_chars:
-        result["truncated"] = True
-        result["outputs"] = {"truncated": text[:max_output_chars]}
-    return _json(result)
+    return _json(
+        collect_device_context(
+            device=device,
+            secrets=secrets,
+            settings=settings,
+            commands_text=commands_text,
+            include_running_config=include_running_config,
+            max_output_chars=max_output_chars,
+        )
+    )
 
 
 @mcp.tool()
@@ -287,14 +239,9 @@ def cisco_collect_and_propose(
     if not collected.get("ok"):
         return collected_text
 
-    summarized = {
-        "device": collected.get("device"),
-        "commands": collected.get("commands"),
-        "outputs": collected.get("outputs"),
-    }
     analysis_intent = (
         f"{intent}\n\nCurrent device context from read-only MCP collection:\n"
-        f"{json.dumps(summarized, ensure_ascii=False, indent=2)[:50000]}"
+        f"{summarize_context_for_ai(collected)}"
     )
     proposal = create_agent_proposal(
         settings=settings,
@@ -358,6 +305,60 @@ def cisco_analyze_show_output(
         intent=analysis_intent,
         devices=[],
         topology_notes=topology_notes,
+        prefer_offline=False,
+    )
+    return _json(proposal.model_dump())
+
+
+@mcp.tool()
+def cisco_explain_config(config: str, detail_level: str = "beginner") -> str:
+    """
+    Explain Cisco IOS/IOS-XE configuration in Vietnamese for non-CCNA users.
+
+    Args:
+        config: Running-config or a config snippet. Secrets should already be redacted.
+        detail_level: "beginner", "normal", or "expert".
+    """
+    intent = (
+        "Giải thích config Cisco sau bằng tiếng Việt, ưu tiên người không biết CCNA. "
+        f"Mức chi tiết: {detail_level}. Nêu mục đích từng khối, rủi ro, và phần nào không nên sửa.\n\n"
+        f"{config[:50000]}"
+    )
+    proposal = create_agent_proposal(
+        settings=settings,
+        intent=intent,
+        devices=[],
+        topology_notes="",
+        prefer_offline=False,
+    )
+    return _json(proposal.model_dump())
+
+
+@mcp.tool()
+def cisco_compare_config(
+    running_config: str,
+    desired_config: str,
+    intent: str = "So sánh running-config với desired config",
+) -> str:
+    """
+    Compare current Cisco config with a desired baseline or proposed config.
+
+    Returns Vietnamese explanation, risk notes, and next checks. Does not push.
+    """
+    compare_intent = (
+        f"{intent}\n\n"
+        "Hãy so sánh config hiện tại và config mong muốn. Nêu điểm khác nhau quan trọng, "
+        "rủi ro, missing items, lệnh cần kiểm tra trước khi áp dụng, và rollback.\n\n"
+        "RUNNING CONFIG:\n"
+        f"{running_config[:30000]}\n\n"
+        "DESIRED CONFIG:\n"
+        f"{desired_config[:30000]}"
+    )
+    proposal = create_agent_proposal(
+        settings=settings,
+        intent=compare_intent,
+        devices=[],
+        topology_notes="",
         prefer_offline=False,
     )
     return _json(proposal.model_dump())

@@ -55,6 +55,8 @@ The registry marks `cisco-config-assistant` as `low` risk and allowlists only:
 - `cisco_collect_device_info`
 - `cisco_collect_and_propose`
 - `cisco_analyze_show_output`
+- `cisco_explain_config`
+- `cisco_compare_config`
 - `cisco_terminal_script`
 - `cisco_recent_jobs`
 - `cisco_recent_backups`

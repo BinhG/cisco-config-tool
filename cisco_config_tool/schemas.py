@@ -70,6 +70,29 @@ class AgentRequest(BaseModel):
         return value.strip()
 
 
+class AdvisorSessionCreate(BaseModel):
+    device_id: int | None = None
+    title: str = Field(default="Advisor session", max_length=160)
+    topology_notes: str = Field(default="", max_length=4000)
+
+    @field_validator("title", "topology_notes")
+    @classmethod
+    def strip_session_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class AdvisorMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=6000)
+    auto_collect: bool = True
+    commands_text: str = Field(default="", max_length=3000)
+    prefer_offline: bool = False
+
+    @field_validator("message", "commands_text")
+    @classmethod
+    def strip_message_text(cls, value: str) -> str:
+        return value.strip()
+
+
 RiskLevel = Literal["low", "medium", "high"]
 ProposalSource = Literal["openai", "offline"]
 

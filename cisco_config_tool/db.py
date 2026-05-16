@@ -70,10 +70,37 @@ class Database:
                     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS advisor_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id INTEGER,
+                    title TEXT NOT NULL DEFAULT 'Advisor session',
+                    topology_notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS advisor_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+                    content TEXT NOT NULL,
+                    proposal TEXT NOT NULL DEFAULT '{}',
+                    context_summary TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES advisor_sessions(id) ON DELETE CASCADE
+                );
+
                 CREATE TRIGGER IF NOT EXISTS devices_updated_at
                 AFTER UPDATE ON devices
                 BEGIN
                     UPDATE devices SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS advisor_sessions_updated_at
+                AFTER UPDATE ON advisor_sessions
+                BEGIN
+                    UPDATE advisor_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
                 END;
                 """
             )

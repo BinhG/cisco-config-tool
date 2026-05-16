@@ -93,6 +93,46 @@
           <button id="deleteDeviceBtn" class="danger" type="button" disabled>Xóa thiết bị</button>
         </div>
 
+        <section class="advisor-box">
+          <div class="panel-title compact">
+            <h2>Quân sư</h2>
+            <span id="advisorStatus" class="muted">Auto-collect context trước khi trả lời</span>
+          </div>
+          <div id="advisorMessages" class="advisor-messages"></div>
+          <form id="advisorForm" class="agent-form">
+            <label>
+              Mô tả nhu cầu mới
+              <textarea
+                id="advisorMessage"
+                name="message"
+                rows="4"
+                placeholder="Ví dụ: Tạo VLAN 20 tên Camera, cổng 5-10, có trunk sang switch tầng 2"
+                required
+              ></textarea>
+            </label>
+            <label>
+              Lệnh show bổ sung nếu cần
+              <textarea
+                name="commands_text"
+                rows="3"
+                placeholder="Để trống để dùng bộ lệnh mặc định: show run, show vlan brief, show interfaces status..."
+              ></textarea>
+            </label>
+            <div class="checks">
+              <label><input name="auto_collect" type="checkbox" checked /> Tự động đọc context thiết bị</label>
+              <label><input name="prefer_offline" type="checkbox" /> Chỉ dùng mẫu offline</label>
+            </div>
+            <button id="advisorBtn" type="submit" disabled>Hỏi quân sư</button>
+          </form>
+          <label>
+            Terminal script để tự paste
+            <textarea id="advisorScript" rows="8" spellcheck="false"></textarea>
+          </label>
+          <div class="actions">
+            <button id="copyAdvisorScript" type="button">Copy terminal script</button>
+          </div>
+        </section>
+
         <section class="agent-box">
           <div class="panel-title compact">
             <h2>AI agent</h2>

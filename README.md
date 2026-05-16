@@ -75,9 +75,23 @@ MCP tools được expose:
 - `cisco_collect_device_info`
 - `cisco_collect_and_propose`
 - `cisco_analyze_show_output`
+- `cisco_explain_config`
+- `cisco_compare_config`
 - `cisco_terminal_script`
 - `cisco_recent_jobs`
 - `cisco_recent_backups`
+
+## Luồng Quân sư
+
+Luồng chính cho người không biết CCNA là tab `Quân sư`:
+
+1. Chọn thiết bị.
+2. Nhập nhu cầu bằng tiếng Việt.
+3. Tool tự chạy bộ lệnh `show ...` read-only để lấy context hiện tại.
+4. AI trả lời theo hội thoại nhiều lượt: nếu thiếu thông tin thì hỏi lại, nếu đủ thì tạo config, verify, rollback.
+5. Tool sinh `terminal script` để bạn copy/paste vào terminal. MCP không tự push.
+
+Nếu không muốn connect thiết bị ở lượt hỏi đó, bỏ chọn `Tự động đọc context thiết bị`.
 
 Config MCP dạng phổ biến:
 

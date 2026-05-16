@@ -231,10 +231,35 @@ textarea {
   gap: 8px;
 }
 
-.agent-box {
+.agent-box,
+.advisor-box {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
+}
+
+.advisor-messages {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.advisor-message {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: #fbfcfd;
+}
+
+.advisor-message.assistant {
+  border-color: #bfdcd8;
+  background: #f1fbf9;
+}
+
+.advisor-message strong {
+  display: block;
+  margin-bottom: 4px;
 }
 
 .agent-result {
