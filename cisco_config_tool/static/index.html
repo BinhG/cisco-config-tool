@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cisco Config Tool</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Cisco Config Tool</h1>
+        <p id="healthText">Đang kiểm tra hệ thống</p>
+      </div>
+      <button id="refreshAll" type="button">Làm mới</button>
+    </header>
+
+    <main class="layout">
+      <section class="panel devices-panel">
+        <div class="panel-title">
+          <h2>Thiết bị</h2>
+          <span id="deviceCount" class="count">0</span>
+        </div>
+
+        <div id="deviceList" class="device-list"></div>
+
+        <form id="deviceForm" class="device-form">
+          <h3>Thêm thiết bị</h3>
+          <label>
+            Tên
+            <input name="name" autocomplete="off" required />
+          </label>
+          <label>
+            Kiểu kết nối
+            <select name="connection_type" id="connectionType">
+              <option value="ssh">SSH</option>
+              <option value="serial">Console</option>
+            </select>
+          </label>
+          <div id="sshFields">
+            <label>
+              IP/Host
+              <input name="host" autocomplete="off" />
+            </label>
+            <label>
+              Port SSH
+              <input name="ssh_port" type="number" min="1" max="65535" value="22" />
+            </label>
+          </div>
+          <div id="serialFields" hidden>
+            <label>
+              Cổng console
+              <input name="serial_port" id="serialPortInput" autocomplete="off" placeholder="COM3" />
+            </label>
+            <label>
+              Baud
+              <input name="baud_rate" type="number" min="300" max="921600" value="9600" />
+            </label>
+          </div>
+          <label>
+            Platform Netmiko
+            <input name="platform" value="cisco_ios" autocomplete="off" />
+          </label>
+          <label>
+            Username
+            <input name="username" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="new-password" />
+          </label>
+          <label>
+            Enable secret
+            <input name="secret" type="password" autocomplete="new-password" />
+          </label>
+          <label>
+            Ghi chú
+            <textarea name="notes" rows="2"></textarea>
+          </label>
+          <button type="submit">Thêm</button>
+        </form>
+      </section>
+
+      <section class="panel work-panel">
+        <div class="panel-title">
+          <h2>Thao tác</h2>
+          <span id="selectedDeviceName" class="muted">Chưa chọn thiết bị</span>
+        </div>
+
+        <div class="actions">
+          <button id="testBtn" type="button" disabled>Test kết nối</button>
+          <button id="backupBtn" type="button" disabled>Backup running-config</button>
+          <button id="deleteDeviceBtn" class="danger" type="button" disabled>Xóa thiết bị</button>
+        </div>
+
+        <section class="agent-box">
+          <div class="panel-title compact">
+            <h2>AI agent</h2>
+            <span id="agentSource" class="muted">Đề xuất cấu hình</span>
+          </div>
+          <form id="agentForm" class="agent-form">
+            <label>
+              Bạn muốn hệ thống mạng làm gì?
+              <textarea
+                id="agentIntent"
+                name="intent"
+                rows="4"
+                placeholder="Ví dụ: tạo VLAN 20 tên Camera cho cổng Gi1/0/5-10 trên switch này"
+                required
+              ></textarea>
+            </label>
+            <label>
+              Ghi chú sơ đồ mạng nếu có
+              <textarea
+                name="topology_notes"
+                rows="2"
+                placeholder="Ví dụ: Gi1/0/48 là uplink về firewall, không được đụng vào"
+              ></textarea>
+            </label>
+            <div class="checks">
+              <label><input name="prefer_offline" type="checkbox" /> Chỉ dùng mẫu offline</label>
+            </div>
+            <button id="agentBtn" type="submit" disabled>Nhờ AI đề xuất</button>
+          </form>
+          <div id="agentResult" class="agent-result" hidden>
+            <div class="agent-summary">
+              <h3 id="agentTitle"></h3>
+              <span id="agentRisk" class="status"></span>
+            </div>
+            <p id="agentSummaryText"></p>
+            <div id="agentQuestions" class="agent-block"></div>
+            <div id="agentWarnings" class="agent-block"></div>
+            <label>
+              Config agent đề xuất
+              <textarea id="agentConfig" rows="10" spellcheck="false"></textarea>
+            </label>
+            <div class="actions">
+              <button id="copyAgentConfig" type="button">Đưa vào ô Push</button>
+              <button id="showAgentDetail" type="button">Xem kiểm tra/rollback</button>
+            </div>
+            <pre id="agentDetail" class="output" hidden></pre>
+          </div>
+        </section>
+
+        <form id="pushForm" class="push-form">
+          <label>
+            Config
+            <textarea id="configText" name="config" rows="16" spellcheck="false">interface GigabitEthernet1/0/1
+description configured-by-tool
+no shutdown</textarea>
+          </label>
+          <div class="checks">
+            <label><input name="backup_first" type="checkbox" checked /> Backup trước khi push</label>
+            <label><input name="save" type="checkbox" /> Save sau khi push</label>
+            <label><input name="allow_risky" type="checkbox" /> Cho phép lệnh rủi ro</label>
+          </div>
+          <button id="pushBtn" type="submit" disabled>Push config</button>
+        </form>
+
+        <div class="backups">
+          <div class="panel-title compact">
+            <h2>Backup</h2>
+            <button id="refreshBackups" type="button">Làm mới</button>
+          </div>
+          <div id="backupList" class="backup-list"></div>
+          <pre id="backupContent" class="output" hidden></pre>
+        </div>
+      </section>
+
+      <section class="panel jobs-panel">
+        <div class="panel-title">
+          <h2>Job</h2>
+          <span id="jobCount" class="count">0</span>
+        </div>
+        <div id="jobList" class="job-list"></div>
+        <div class="job-detail">
+          <h3 id="jobTitle">Chưa chọn job</h3>
+          <pre id="jobOutput" class="output"></pre>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
